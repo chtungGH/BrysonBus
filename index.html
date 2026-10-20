@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>大臺北公車圖鑑收集本</title>
+  <style>
+    :root {
+      --primary: #1976d2;
+      --success: #2e7d32;
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #212121;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 70px; }
+    header { background: var(--primary); color: white; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .stats { display: flex; justify-content: space-around; background: white; margin: 12px; padding: 12px; border-radius: 8px; font-weight: bold; }
+    .stats span { color: var(--success); }
+    
+    .search-box { padding: 0 12px 10px 12px; }
+    .search-box input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    
+    .list-container { padding: 0 12px; }
+    .bus-card { background: var(--card); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .bus-info h3 { font-size: 18px; color: #111; }
+    .bus-info p { font-size: 13px; color: #666; margin-top: 4px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-collected { background: #e8f5e9; color: var(--success); }
+    .badge-uncollected { background: #f5f5f5; color: #888; }
+    
+    .btn-action { padding: 8px 14px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .btn-photo { background: var(--primary); color: white; }
+    .btn-view { background: #e0e0e0; color: #333; margin-right: 6px; }
+    
+    /* 彈出視窗 */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+    .modal-content { background: white; border-radius: 12px; padding: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
+    .modal-content h2 { margin-bottom: 16px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 14px; margin-bottom: 4px; font-weight: 500; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+    .preview-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 6px; margin-top: 8px; display: none; }
+    .btn-submit { width: 100%; padding: 12px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+    .btn-cancel { width: 100%; padding: 10px; background: transparent; color: #666; border: none; margin-top: 6px; cursor: pointer; }
+    .loading-overlay { display: none; text-align: center; margin: 10px 0; color: var(--primary); font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h2>大臺北公車圖鑑</h2>
+  </header>
+
+  <div class="stats">
+    <div>總路線數: <span id="totalRoutes">0</span></div>
+    <div>已收集: <span id="collectedCount">0</span></div>
+    <div>完成率: <span id="rate">0%</span></div>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="搜尋公車號碼 (例如 307、紅2、民生幹線)..." oninput="filterRoutes()">
+  </div>
+
+  <div class="list-container" id="routesList">
+    <div style="text-align:center; padding: 20px; color: #888;">正在載入路線資料庫...</div>
+  </div>
+
+  <!-- 拍照與上傳彈窗 -->
+  <div class="modal" id="uploadModal">
+    <div class="modal-content">
+      <h2 id="modalRouteTitle">公車打卡</h2>
+      
+      <div class="form-group">
+        <label>拍攝公車照片</label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleImageSelection(event)">
+        <img id="imagePreview" class="preview-img">
+      </div>
+
+      <div class="form-group">
+        <label>拍攝者</label>
+        <input type="text" id="inputPhotographer" placeholder="您的名字">
+      </div>
+
+      <div class="form-group">
+        <label>拍攝地點</label>
+        <input type="text" id="inputLocation" placeholder="例：松山車站、捷運忠孝敦化站">
+      </div>
+
+      <div class="form-group">
+        <label>備註事項</label>
+        <textarea id="inputNotes" rows="2" placeholder="例：全新電動車塗裝、雨天拍攝"></textarea>
+      </div>
+
+      <div class="loading-overlay" id="loadingOverlay">壓縮相片與上傳雲端中，請稍候...</div>
+      <button class="btn-submit" id="submitBtn" onclick="submitPhoto()">確認上傳</button>
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+    </div>
+  </div>
+
+  <script>
+    // 請替換為您部署的 GAS Web App URL
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwhcezqWvm7LVV5a8NPHdE2sEFRlCfn-umAqVcBFXje8P2U0RASwlZd2FsQEUa1wgIfcQ/exec";
+
+    let busData = [];
+    let currentSelectedRoute = null;
+    let compressedBase64 = null;
+
+    // 記住上次輸入的拍攝者名稱
+    window.onload = () => {
+      const savedUser = localStorage.getItem("bus_photographer") || "";
+      document.getElementById("inputPhotographer").value = savedUser;
+      loadRoutes();
+    };
+
+    // 從 GAS 讀取母檔
+    async function loadRoutes() {
+      try {
+        const res = await fetch(GAS_API_URL);
+        const json = await res.json();
+        if (json.status === "success") {
+          busData = json.data;
+          renderList(busData);
+          updateStats();
+        }
+      } catch (err) {
+        document.getElementById("routesList").innerHTML = `<div style="text-align:center; color:red;">載入失敗，請確認 GAS 網址與網路設定。</div>`;
+      }
+    }
+
+    function renderList(list) {
+      const container = document.getElementById("routesList");
+      if (list.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 20px; color: #888;">無符合的路線</div>`;
+        return;
+      }
+      container.innerHTML = list.map(item => {
+        const isCollected = item.status === "已收集" || !!item.photoUrl;
+        return `
+          <div class="bus-card">
+            <div class="bus-info">
+              <h3>${item.routeName}</h3>
+              <p>${item.category} · <span class="badge ${isCollected ? 'badge-collected' : 'badge-uncollected'}">${isCollected ? '已收集' : '未收集'}</span></p>
+              ${isCollected && item.location ? `<p style="font-size:11px; color:#888;">地點: ${item.location} (${item.photographer || '匿名'})</p>` : ''}
+            </div>
+            <div>
+              ${isCollected && item.photoUrl ? `<button class="btn-action btn-view" onclick="window.open('${item.photoUrl}', '_blank')">查看</button>` : ''}
+              <button class="btn-action btn-photo" onclick="openUploadModal('${item.routeName}')">${isCollected ? '補拍' : '拍照'}</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function filterRoutes() {
+      const term = document.getElementById("searchInput").value.trim().toLowerCase();
+      const filtered = busData.filter(b => b.routeName.toLowerCase().includes(term) || b.category.includes(term));
+      renderList(filtered);
+    }
+
+    function updateStats() {
+      const total = busData.length;
+      const collected = busData.filter(b => b.status === "已收集" || !!b.photoUrl).length;
+      document.getElementById("totalRoutes").innerText = total;
+      document.getElementById("collectedCount").innerText = collected;
+      document.getElementById("rate").innerText = total ? `${Math.round((collected / total) * 100)}%` : "0%";
+    }
+
+    function openUploadModal(routeName) {
+      currentSelectedRoute = routeName;
+      compressedBase64 = null;
+      document.getElementById("modalRouteTitle").innerText = `📸 記錄：${routeName}`;
+      document.getElementById("imagePreview").style.display = "none";
+      document.getElementById("cameraInput").value = "";
+      document.getElementById("inputLocation").value = "";
+      document.getElementById("inputNotes").value = "";
+      document.getElementById("uploadModal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("uploadModal").style.display = "none";
+    }
+
+    // 前端壓縮圖片（手機拍照常達 10MB，壓至 1280px / 0.8 品質，約 300KB）
+    function handleImageSelection(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1280;
+
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
+          const preview = document.getElementById("imagePreview");
+          preview.src = compressedBase64;
+          preview.style.display = "block";
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function submitPhoto() {
+      if (!compressedBase64) {
+        alert("請先拍照或選取照片！");
+        return;
+      }
+
+      const photographer = document.getElementById("inputPhotographer").value.trim();
+      const location = document.getElementById("inputLocation").value.trim();
+      const notes = document.getElementById("inputNotes").value.trim();
+
+      localStorage.setItem("bus_photographer", photographer);
+
+      document.getElementById("loadingOverlay").style.display = "block";
+      document.getElementById("submitBtn").disabled = true;
+
+      const payload = {
+        routeName: currentSelectedRoute,
+        photographer: photographer,
+        location: location,
+        notes: notes,
+        image: compressedBase64
+      };
+
+      try {
+        const res = await fetch(GAS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" }, // 避免 CORS 預檢請求問題
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.status === "success") {
+          alert(`公車【${currentSelectedRoute}】打卡成功！`);
+          closeModal();
+          // 更新本地快取
+          const target = busData.find(b => b.routeName === currentSelectedRoute);
+          if (target) {
+            target.status = "已收集";
+            target.photoUrl = result.viewUrl;
+            target.photographer = photographer;
+            target.location = location;
+          }
+          filterRoutes();
+          updateStats();
+        } else {
+          alert("上傳失敗: " + result.message);
+        }
+      } catch (err) {
+        alert("連線失敗：" + err.message);
+      } finally {
+        document.getElementById("loadingOverlay").style.display = "none";
+        document.getElementById("submitBtn").disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
