@@ -19,7 +19,7 @@
     .stats { display: flex; justify-content: space-around; background: white; margin: 10px 12px; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; }
     .stats span { color: var(--success); }
 
-    /* 分類標籤篩選按鈕 (橫向滾動) */
+    /* 分類標籤篩選按鈕列 (橫向滾動) */
     .filter-container {
       display: flex;
       overflow-x: auto;
@@ -106,22 +106,22 @@
     <div>達成率: <span id="rate">0%</span></div>
   </div>
 
-  <!-- 分類篩選按鈕列 -->
+  <!-- 分類篩選按鈕列 (已調整為指定順序與簡稱) -->
   <div class="filter-container" id="categoryChips">
-    <button class="filter-chip active" onclick="setCategory('全部')">全部</button>
-    <button class="filter-chip" onclick="setCategory('幹線公車')">幹線公車</button>
-    <button class="filter-chip" onclick="setCategory('捷運接駁')">捷運接駁</button>
-    <button class="filter-chip" onclick="setCategory('0~99')">一般 0~99</button>
-    <button class="filter-chip" onclick="setCategory('100~199')">一般 100~199</button>
-    <button class="filter-chip" onclick="setCategory('200~299')">一般 200~299</button>
-    <button class="filter-chip" onclick="setCategory('300~399')">一般 300~399</button>
-    <button class="filter-chip" onclick="setCategory('500~599')">一般 500~599</button>
-    <button class="filter-chip" onclick="setCategory('600~699')">一般 600~699</button>
-    <button class="filter-chip" onclick="setCategory('700~799')">一般 700~799</button>
-    <button class="filter-chip" onclick="setCategory('800~899')">一般 800~899</button>
-    <button class="filter-chip" onclick="setCategory('900~999')">快速/9字頭</button>
-    <button class="filter-chip" onclick="setCategory('新巴士')">新巴士(F)</button>
-    <button class="filter-chip" onclick="setCategory('其他')">專車/其他</button>
+    <button class="filter-chip active" data-cat="all" onclick="setCategory('all')">全部</button>
+    <button class="filter-chip" data-cat="0-99" onclick="setCategory('0-99')">0~99</button>
+    <button class="filter-chip" data-cat="100-199" onclick="setCategory('100-199')">100~199</button>
+    <button class="filter-chip" data-cat="200-299" onclick="setCategory('200-299')">200~299</button>
+    <button class="filter-chip" data-cat="300-399" onclick="setCategory('300-399')">300~399</button>
+    <button class="filter-chip" data-cat="500-599" onclick="setCategory('500-599')">500~599</button>
+    <button class="filter-chip" data-cat="600-699" onclick="setCategory('600-699')">600~699</button>
+    <button class="filter-chip" data-cat="700-799" onclick="setCategory('700-799')">700~799</button>
+    <button class="filter-chip" data-cat="800-899" onclick="setCategory('800-899')">800~899</button>
+    <button class="filter-chip" data-cat="900-999" onclick="setCategory('900-999')">900~999</button>
+    <button class="filter-chip" data-cat="main" onclick="setCategory('main')">幹線</button>
+    <button class="filter-chip" data-cat="mrt" onclick="setCategory('mrt')">捷運接駁</button>
+    <button class="filter-chip" data-cat="newbus" onclick="setCategory('newbus')">新巴士</button>
+    <button class="filter-chip" data-cat="other" onclick="setCategory('other')">專車/其他</button>
   </div>
 
   <div class="search-box">
@@ -180,7 +180,7 @@
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycby9ddzo53IODvoZSyQRP8cP00oNLfP6b7dELBJBJm5jQgRfpOL_cIu9kE80rh6_ygORiQ/exec";
 
     let busData = [];
-    let currentCategory = "全部";
+    let currentCategoryKey = "all";
     let currentSelectedRoute = null;
     let compressedBase64 = null;
 
@@ -216,51 +216,76 @@
       }
     }
 
-    // 分類切換
-    function setCategory(cat) {
-      currentCategory = cat;
+    // 分類切換 (使用精準 Key)
+    function setCategory(catKey) {
+      currentCategoryKey = catKey;
       const chips = document.querySelectorAll(".filter-chip");
       chips.forEach(c => {
-        c.classList.toggle("active", c.innerText.includes(cat) || (cat === "全部" && c.innerText === "全部"));
+        c.classList.toggle("active", c.getAttribute("data-cat") === catKey);
       });
       applyFilters();
     }
 
-    // 判斷一般公車數字區間
+    // 檢查路線是否開頭為特定區間純數字
     function matchNumberRange(routeName, start, end) {
+      // 排除接駁車 (紅2, 藍36 等) 與新巴士 (F101 等)
+      if (/^[紅藍綠棕橘F]/.test(routeName)) return false;
       const match = routeName.match(/^\d+/);
       if (!match) return false;
       const num = parseInt(match[0], 10);
       return num >= start && num <= end;
     }
 
-    // 綜合過濾 (分類 + 搜尋框)
+    // 綜合過濾 (分類代碼 + 搜尋框)
     function applyFilters() {
       const term = document.getElementById("searchInput").value.trim().toLowerCase();
       
       const filtered = busData.filter(item => {
-        // 1. 搜尋字詞比對
-        const matchSearch = item.routeName.toLowerCase().includes(term) || item.category.toLowerCase().includes(term);
+        const rName = item.routeName;
+        const rCat = item.category || "";
+
+        // 1. 搜尋比對 (路線名稱或分類包含搜尋字詞)
+        const matchSearch = rName.toLowerCase().includes(term) || rCat.toLowerCase().includes(term);
         if (!matchSearch) return false;
 
         // 2. 標籤分類比對
-        if (currentCategory === "全部") return true;
-        if (currentCategory === "幹線公車") return item.category.includes("幹線");
-        if (currentCategory === "捷運接駁") return item.category.includes("接駁") || item.routeName.match(/^(紅|藍|綠|棕|橘)/);
-        if (currentCategory === "新巴士") return item.routeName.startsWith("F") || item.category.includes("新巴士");
-        if (currentCategory === "快速/9字頭") return item.category.includes("快速") || matchNumberRange(item.routeName, 900, 999);
-        if (currentCategory === "0~99") return matchNumberRange(item.routeName, 0, 99) && !item.routeName.match(/^(紅|藍|綠|棕|橘|F)/);
-        if (currentCategory === "100~199") return matchNumberRange(item.routeName, 100, 199);
-        if (currentCategory === "200~299") return matchNumberRange(item.routeName, 200, 299);
-        if (currentCategory === "300~399") return matchNumberRange(item.routeName, 300, 399);
-        if (currentCategory === "500~599") return matchNumberRange(item.routeName, 500, 599);
-        if (currentCategory === "600~699") return matchNumberRange(item.routeName, 600, 699);
-        if (currentCategory === "700~799") return matchNumberRange(item.routeName, 700, 799);
-        if (currentCategory === "800~899") return matchNumberRange(item.routeName, 800, 899);
-        if (currentCategory === "其他") {
-          return !item.category.includes("幹線") && !item.category.includes("接駁") && !item.routeName.startsWith("F") && !item.routeName.match(/^\d+/);
+        switch (currentCategoryKey) {
+          case "all":
+            return true;
+          case "0-99":
+            return matchNumberRange(rName, 0, 99);
+          case "100-199":
+            return matchNumberRange(rName, 100, 199);
+          case "200-299":
+            return matchNumberRange(rName, 200, 299);
+          case "300-399":
+            return matchNumberRange(rName, 300, 399);
+          case "500-599":
+            return matchNumberRange(rName, 500, 599);
+          case "600-699":
+            return matchNumberRange(rName, 600, 699);
+          case "700-799":
+            return matchNumberRange(rName, 700, 799);
+          case "800-899":
+            return matchNumberRange(rName, 800, 899);
+          case "900-999":
+            return matchNumberRange(rName, 900, 999);
+          case "main":
+            return rCat.includes("幹線");
+          case "mrt":
+            return rCat.includes("接駁") || /^[紅藍綠棕橘]/.test(rName);
+          case "newbus":
+            return rName.startsWith("F") || rCat.includes("新巴士");
+          case "other":
+            // 不屬於純數字路線、幹線、接駁、新巴士的特殊路線
+            const isNum = /^\d+/.test(rName) && !/^[紅藍綠棕橘F]/.test(rName);
+            const isMain = rCat.includes("幹線");
+            const isMrt = rCat.includes("接駁") || /^[紅藍綠棕橘]/.test(rName);
+            const isNewBus = rName.startsWith("F") || rCat.includes("新巴士");
+            return !isNum && !isMain && !isMrt && !isNewBus;
+          default:
+            return true;
         }
-        return true;
       });
 
       renderList(filtered);
@@ -311,7 +336,7 @@
       document.getElementById("uploadModal").style.display = "none";
     }
 
-    // 處理圖片壓縮 (拍照或選檔通用)
+    // 圖片壓縮處理
     function handleImageSelection(event) {
       const file = event.target.files[0];
       if (!file) return;
