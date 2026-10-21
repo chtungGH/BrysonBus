@@ -45,8 +45,28 @@
       color: white;
     }
     
-    .search-box { padding: 0 12px 10px 12px; }
+    /* 搜尋與新增工具列 */
+    .search-row {
+      display: flex;
+      padding: 0 12px 10px 12px;
+      gap: 8px;
+    }
+    .search-box { flex: 1; }
     .search-box input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
+    .btn-add-new {
+      background: #ff9800;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
     
     .list-container { padding: 0 12px; }
     .bus-card { background: var(--card); border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -60,12 +80,11 @@
     .btn-photo { background: var(--primary); color: white; }
     .btn-view { background: #e0e0e0; color: #333; margin-right: 6px; }
     
-    /* 彈跳次頁視窗 */
+    /* 彈跳視窗共用樣式 */
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
     .modal-content { background: white; border-radius: 12px; padding: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
     .modal-content h2 { margin-bottom: 14px; font-size: 18px; }
     
-    /* 拍照/選檔按鈕組 */
     .file-input-group {
       display: flex;
       gap: 10px;
@@ -87,7 +106,7 @@
     
     .form-group { margin-bottom: 12px; }
     .form-group label { display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500; }
-    .form-group select, .form-group textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; background: white; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; background: white; }
     
     .btn-submit { width: 100%; padding: 12px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; margin-top: 8px; cursor: pointer; }
     .btn-cancel { width: 100%; padding: 8px; background: transparent; color: #666; border: none; margin-top: 6px; cursor: pointer; font-size: 14px; }
@@ -106,7 +125,7 @@
     <div>達成率: <span id="rate">0%</span></div>
   </div>
 
-  <!-- 分類篩選按鈕列 (已調整為指定順序與簡稱) -->
+  <!-- 分類篩選標籤列 -->
   <div class="filter-container" id="categoryChips">
     <button class="filter-chip active" data-cat="all" onclick="setCategory('all')">全部</button>
     <button class="filter-chip" data-cat="0-99" onclick="setCategory('0-99')">0~99</button>
@@ -124,18 +143,42 @@
     <button class="filter-chip" data-cat="other" onclick="setCategory('other')">專車/其他</button>
   </div>
 
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="搜尋公車號碼 (例如 307、紅2、民生幹線)..." oninput="applyFilters()">
+  <!-- 搜尋框與「新增公車」按鈕 -->
+  <div class="search-row">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="搜尋號碼 (例如 307、紅2)..." oninput="applyFilters()">
+    </div>
+    <button class="btn-add-new" onclick="openAddModal()">➕ 新增</button>
   </div>
 
   <div class="list-container" id="routesList">
     <div style="text-align:center; padding: 20px; color: #888;">資料庫載入中...</div>
   </div>
 
-  <!-- 蒐集次頁視窗 (Modal) -->
+  <!-- 彈跳視窗：一般路線蒐集 / 手動新增路線 (共用此 Modal) -->
   <div class="modal" id="uploadModal">
     <div class="modal-content">
       <h2 id="modalRouteTitle">📸 路線蒐集打卡</h2>
+
+      <!-- 手動新增時才顯示：路線名稱與分類輸入區 -->
+      <div id="newRouteFields" style="display: none;">
+        <div class="form-group">
+          <label>公車路線名稱 (必填)</label>
+          <input type="text" id="inputNewRouteName" placeholder="例如：1815、2088、南港接駁專車">
+        </div>
+        <div class="form-group">
+          <label>路線分類</label>
+          <select id="selectNewRouteCategory">
+            <option value="一般公車">一般公車</option>
+            <option value="幹線公車">幹線公車</option>
+            <option value="捷運接駁">捷運接駁</option>
+            <option value="新巴士">新巴士</option>
+            <option value="四碼客運" selected>四碼客運</option>
+            <option value="觀光專車">觀光專車</option>
+            <option value="其他專車">其他專車</option>
+          </select>
+        </div>
+      </div>
       
       <!-- 選擇檔案 or 拍照 雙模式 -->
       <label style="font-size:13px; font-weight:500; margin-bottom:6px; display:block;">相片來源</label>
@@ -152,13 +195,13 @@
 
       <img id="imagePreview" class="preview-img">
 
-      <!-- 拍攝者下拉式選單 (連動基本參數) -->
+      <!-- 拍攝者下拉選單 -->
       <div class="form-group">
         <label>拍攝者</label>
         <select id="selectPhotographer"></select>
       </div>
 
-      <!-- 拍攝地點下拉式選單 (連動基本參數) -->
+      <!-- 拍攝地點下拉選單 -->
       <div class="form-group">
         <label>拍攝地點</label>
         <select id="selectLocation"></select>
@@ -166,7 +209,7 @@
 
       <div class="form-group">
         <label>備註事項 (選填)</label>
-        <textarea id="inputNotes" rows="2" placeholder="例如：新塗裝、雨天、特寫車頭"></textarea>
+        <textarea id="inputNotes" rows="2" placeholder="例如：新塗裝、長途客運、特寫車頭"></textarea>
       </div>
 
       <div class="loading-overlay" id="loadingOverlay">圖片壓縮並傳輸至 Google Drive 中...</div>
@@ -177,18 +220,18 @@
 
   <script>
     // 請替換為您的 GAS 部署網址
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycby9ddzo53IODvoZSyQRP8cP00oNLfP6b7dELBJBJm5jQgRfpOL_cIu9kE80rh6_ygORiQ/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyKcmxikX1k2pP94BckxY-H-dC0AdrdqHAvrhr3I75u1wj2JAEgEMaS3PajgRrJwRY4dg/exec";
 
     let busData = [];
     let currentCategoryKey = "all";
     let currentSelectedRoute = null;
+    let isAddingNewRoute = false; // 是否處於手動新增模式
     let compressedBase64 = null;
 
     window.onload = () => {
       loadInitialData();
     };
 
-    // 從 GAS 獲取「公車記錄」與「基本參數」
     async function loadInitialData() {
       try {
         const res = await fetch(GAS_API_URL);
@@ -196,13 +239,11 @@
         if (json.status === "success") {
           busData = json.data;
 
-          // 設定拍攝者下拉選項
           const pSelect = document.getElementById("selectPhotographer");
           pSelect.innerHTML = (json.config.photographers || []).map(p => 
             `<option value="${p}" ${p === json.config.defaultPhotographer ? 'selected' : ''}>${p}</option>`
           ).join("");
 
-          // 設定地點下拉選項
           const lSelect = document.getElementById("selectLocation");
           lSelect.innerHTML = (json.config.locations || []).map(l => 
             `<option value="${l}" ${l === json.config.defaultLocation ? 'selected' : ''}>${l}</option>`
@@ -216,7 +257,6 @@
       }
     }
 
-    // 分類切換 (使用精準 Key)
     function setCategory(catKey) {
       currentCategoryKey = catKey;
       const chips = document.querySelectorAll(".filter-chip");
@@ -226,9 +266,7 @@
       applyFilters();
     }
 
-    // 檢查路線是否開頭為特定區間純數字
     function matchNumberRange(routeName, start, end) {
-      // 排除接駁車 (紅2, 藍36 等) 與新巴士 (F101 等)
       if (/^[紅藍綠棕橘F]/.test(routeName)) return false;
       const match = routeName.match(/^\d+/);
       if (!match) return false;
@@ -236,7 +274,6 @@
       return num >= start && num <= end;
     }
 
-    // 綜合過濾 (分類代碼 + 搜尋框)
     function applyFilters() {
       const term = document.getElementById("searchInput").value.trim().toLowerCase();
       
@@ -244,11 +281,9 @@
         const rName = item.routeName;
         const rCat = item.category || "";
 
-        // 1. 搜尋比對 (路線名稱或分類包含搜尋字詞)
         const matchSearch = rName.toLowerCase().includes(term) || rCat.toLowerCase().includes(term);
         if (!matchSearch) return false;
 
-        // 2. 標籤分類比對
         switch (currentCategoryKey) {
           case "all":
             return true;
@@ -277,7 +312,6 @@
           case "newbus":
             return rName.startsWith("F") || rCat.includes("新巴士");
           case "other":
-            // 不屬於純數字路線、幹線、接駁、新巴士的特殊路線
             const isNum = /^\d+/.test(rName) && !/^[紅藍綠棕橘F]/.test(rName);
             const isMain = rCat.includes("幹線");
             const isMrt = rCat.includes("接駁") || /^[紅藍綠棕橘]/.test(rName);
@@ -323,10 +357,26 @@
       document.getElementById("rate").innerText = total ? `${Math.round((collected / total) * 100)}%` : "0%";
     }
 
+    // 開啟既有路線蒐集
     function openUploadModal(routeName) {
+      isAddingNewRoute = false;
       currentSelectedRoute = routeName;
       compressedBase64 = null;
       document.getElementById("modalRouteTitle").innerText = `📸 路線蒐集：${routeName}`;
+      document.getElementById("newRouteFields").style.display = "none";
+      document.getElementById("imagePreview").style.display = "none";
+      document.getElementById("inputNotes").value = "";
+      document.getElementById("uploadModal").style.display = "flex";
+    }
+
+    // 🌟 開啟手動新增路線視窗
+    function openAddModal() {
+      isAddingNewRoute = true;
+      currentSelectedRoute = null;
+      compressedBase64 = null;
+      document.getElementById("modalRouteTitle").innerText = `➕ 新增公車紀錄`;
+      document.getElementById("newRouteFields").style.display = "block";
+      document.getElementById("inputNewRouteName").value = "";
       document.getElementById("imagePreview").style.display = "none";
       document.getElementById("inputNotes").value = "";
       document.getElementById("uploadModal").style.display = "flex";
@@ -336,7 +386,6 @@
       document.getElementById("uploadModal").style.display = "none";
     }
 
-    // 圖片壓縮處理
     function handleImageSelection(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -374,6 +423,19 @@
     }
 
     async function submitPhoto() {
+      let routeName = currentSelectedRoute;
+      let category = "一般公車";
+
+      // 若是手動新增模式，取得使用者輸入的路線與分類
+      if (isAddingNewRoute) {
+        routeName = document.getElementById("inputNewRouteName").value.trim();
+        category = document.getElementById("selectNewRouteCategory").value;
+        if (!routeName) {
+          alert("請輸入路線名稱或車號！");
+          return;
+        }
+      }
+
       if (!compressedBase64) {
         alert("請先完成拍照或選取照片！");
         return;
@@ -387,7 +449,8 @@
       document.getElementById("submitBtn").disabled = true;
 
       const payload = {
-        routeName: currentSelectedRoute,
+        routeName: routeName,
+        category: category,
         photographer: photographer,
         location: location,
         notes: notes,
@@ -403,16 +466,28 @@
         const result = await res.json();
 
         if (result.status === "success") {
-          alert(`公車【${currentSelectedRoute}】打卡成功！`);
+          alert(`公車【${routeName}】打卡成功！`);
           closeModal();
           
-          // 更新記憶體快取
-          const target = busData.find(b => b.routeName === currentSelectedRoute);
+          // 更新本地資料清單
+          let target = busData.find(b => b.routeName === routeName);
           if (target) {
             target.status = "已收集";
             target.photoUrl = result.viewUrl;
             target.photographer = photographer;
             target.location = location;
+            target.notes = notes;
+          } else {
+            // 新加入的路線直接 push 進記憶體
+            busData.push({
+              routeName: routeName,
+              category: category,
+              status: "已收集",
+              photoUrl: result.viewUrl,
+              photographer: photographer,
+              location: location,
+              notes: notes
+            });
           }
           applyFilters();
           updateStats();
