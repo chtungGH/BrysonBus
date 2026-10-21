@@ -203,6 +203,11 @@
   <script>
     // ⚠️ 請替換為您的 GAS 部署網址
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyKcmxikX1k2pP94BckxY-H-dC0AdrdqHAvrhr3I75u1wj2JAEgEMaS3PajgRrJwRY4dg/exec";
+    
+    // 本機快取版本控制（若將來資料結構大幅改版，改為 v1.2 等即可自動失效重取）
+    const CACHE_VERSION = "v1.1";
+    const CACHE_KEY_DATA = `bryson_bus_data_${CACHE_VERSION}`;
+    const CACHE_KEY_CONFIG = `bryson_bus_config_${CACHE_VERSION}`;
 
     let busData = [];
     let currentCategoryKey = "all";
@@ -211,31 +216,82 @@
     let compressedBase64 = null;
 
     window.onload = () => {
-      loadInitialData();
+      // 1. 先嘗試從本機快取瞬間讀取資料（0.1 秒秒開）
+      const hasCache = loadFromCache();
+
+      // 2. 背景靜默向 GAS 同步最新資料
+      syncWithServer(!hasCache);
     };
 
-    async function loadInitialData() {
+    // 從手機快取讀取
+    function loadFromCache() {
+      try {
+        const cachedData = localStorage.getItem(CACHE_KEY_DATA);
+        const cachedConfig = localStorage.getItem(CACHE_KEY_CONFIG);
+
+        if (cachedData) {
+          busData = JSON.parse(cachedData);
+          if (cachedConfig) {
+            setupConfigDropdowns(JSON.parse(cachedConfig));
+          }
+          applyFilters();
+          updateStats();
+          return true;
+        }
+      } catch (err) {
+        console.warn("讀取快取失敗，將從伺服器取得:", err);
+      }
+      return false;
+    }
+
+    // 將資料寫入本機快取
+    function saveToCache(data, config) {
+      try {
+        if (data) localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(data));
+        if (config) localStorage.setItem(CACHE_KEY_CONFIG, JSON.stringify(config));
+      } catch (err) {
+        console.warn("寫入快取失敗:", err);
+      }
+    }
+
+    // 設定拍攝者與拍攝地點選單
+    function setupConfigDropdowns(config) {
+      if (!config) return;
+      const pSelect = document.getElementById("selectPhotographer");
+      if (config.photographers && config.photographers.length > 0) {
+        pSelect.innerHTML = config.photographers.map(p => 
+          `<option value="${p}" ${p === config.defaultPhotographer ? 'selected' : ''}>${p}</option>`
+        ).join("");
+      }
+
+      const lSelect = document.getElementById("selectLocation");
+      if (config.locations && config.locations.length > 0) {
+        lSelect.innerHTML = config.locations.map(l => 
+          `<option value="${l}" ${l === config.defaultLocation ? 'selected' : ''}>${l}</option>`
+        ).join("");
+      }
+    }
+
+    // 背景連線同步
+    async function syncWithServer(isFirstLoad) {
       try {
         const res = await fetch(GAS_API_URL);
         const json = await res.json();
         if (json.status === "success") {
           busData = json.data;
+          setupConfigDropdowns(json.config);
+          
+          // 覆蓋快取為最新狀態
+          saveToCache(json.data, json.config);
 
-          const pSelect = document.getElementById("selectPhotographer");
-          pSelect.innerHTML = (json.config.photographers || []).map(p => 
-            `<option value="${p}" ${p === json.config.defaultPhotographer ? 'selected' : ''}>${p}</option>`
-          ).join("");
-
-          const lSelect = document.getElementById("selectLocation");
-          lSelect.innerHTML = (json.config.locations || []).map(l => 
-            `<option value="${l}" ${l === json.config.defaultLocation ? 'selected' : ''}>${l}</option>`
-          ).join("");
-
+          // 重新整理畫面
           applyFilters();
           updateStats();
         }
       } catch (err) {
-        document.getElementById("routesList").innerHTML = `<div style="text-align:center; color:red; padding:20px;">載入失敗，請確認 GAS API 網址是否正確。</div>`;
+        if (isFirstLoad) {
+          document.getElementById("routesList").innerHTML = `<div style="text-align:center; color:red; padding:20px;">載入失敗，請確認網路連線或 GAS API 網址。</div>`;
+        }
       }
     }
 
@@ -466,6 +522,10 @@
               notes: notes
             });
           }
+
+          // 即時更新手機本機快取
+          saveToCache(busData, null);
+
           applyFilters();
           updateStats();
         } else {
